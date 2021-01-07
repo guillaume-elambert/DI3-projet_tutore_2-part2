@@ -60,7 +60,7 @@ typedef struct
     int tailleTableSymboles; /**< taille memoire du tableau tableSymboles */
 } TLex;
 
-char *separators = ":,;\n";
+char *separators = " ,;\t\n{}[]";
 
 /**
  * \fn int isSep(char _symb)
@@ -93,10 +93,10 @@ int isSep(const char _symb)
  */
 TLex *initLexData(char *_data)
 {
-    TLex *lexData;
+    TLex *lexData = malloc(sizeof(TLex));
     lexData->data = _data;
     lexData->startPos = _data;
-    lexData->nbLignes = 0;
+    lexData->nbLignes = 1;
     lexData->tableSymboles = NULL;
     lexData->nbSymboles = 0;
     lexData->tailleTableSymboles = 0;
@@ -115,6 +115,15 @@ TLex *initLexData(char *_data)
 void deleteLexData(TLex **_lexData)
 {
     free((*_lexData)->data);
+    //free((*_lexData)->tableSymboles);
+    for (int i = 0; i < (*_lexData)->nbSymboles; ++i)
+    {
+        if ((*_lexData)->tableSymboles[i].type == JSON_STRING)
+        {
+            free((*_lexData)->tableSymboles[i].val.chaine);
+        }
+    }
+    free((*_lexData)->tableSymboles);
     free(*_lexData);
 }
 
@@ -128,8 +137,42 @@ void deleteLexData(TLex **_lexData)
  */
 void printLexData(TLex *_lexData)
 {
-    printf("LexData\ndata: %s\nstartPos: %s\nnbLignes: %d\nnbSymboles: %d", _lexData->data, _lexData->startPos, _lexData->nbLignes, _lexData->nbSymboles);
+    printf("LexData\ndata: \"%s\"\nstartPos: \"%s\"\nnbLignes: %d\nnbSymboles: %d\ntableSymboles :\n", _lexData->data, _lexData->startPos, _lexData->nbLignes, _lexData->nbSymboles);
+    for (int i = 0; i < _lexData->nbSymboles; i++)
+    {
+
+        switch (_lexData->tableSymboles[i].type)
+        {
+        case JSON_STRING:
+            printf("\tChaine\t: %s\n", _lexData->tableSymboles[i].val.chaine);
+            break;
+
+        case JSON_INT_NUMBER:
+            printf("\tEntier\t: %d\n", _lexData->tableSymboles[i].val.entier);
+            break;
+
+        case JSON_REAL_NUMBER:
+            printf("\tReel\t: %f\n", _lexData->tableSymboles[i].val.reel);
+            break;
+        }
+    }
 }
+
+/**
+ * \fn int changeTableSymboleSize(TLex *_lexData)
+ * \brief Fonction qui incrémente le nombre de symbole de la table des symbole et augmente sa taille
+ * 
+ * \param[inout] _lexData donnees de l'analyseur lexical
+ * \return reallocation reussie
+ */
+int changeTableSymboleSize(TLex *_lexData)
+{
+    _lexData->tailleTableSymboles += sizeof(TSymbole);
+    _lexData->tableSymboles = realloc(_lexData->tableSymboles, _lexData->tailleTableSymboles * 2);
+
+    return _lexData->tableSymboles ? 0 : 1;
+}
+
 /**
  * \fn void addIntSymbolToLexData(TLex * _lexData, const int _val)
  * \brief fonction qui ajoute un symbole entier a la table des symboles
@@ -140,15 +183,8 @@ void printLexData(TLex *_lexData)
  */
 void addIntSymbolToLexData(TLex *_lexData, const int _val)
 {
-    int toContinue = 1;
 
-    if (_lexData->nbSymboles > _lexData->tailleTableSymboles)
-    {
-        _lexData->tailleTableSymboles += 4;
-        toContinue = realloc(_lexData->tableSymboles, _lexData->tailleTableSymboles);
-    }
-
-    if (toContinue)
+    if (!changeTableSymboleSize(_lexData))
     {
         _lexData->tableSymboles[_lexData->nbSymboles].type = JSON_INT_NUMBER;
         _lexData->tableSymboles[_lexData->nbSymboles].val.entier = _val;
@@ -165,15 +201,7 @@ void addIntSymbolToLexData(TLex *_lexData, const int _val)
  */
 void addRealSymbolToLexData(TLex *_lexData, const float _val)
 {
-    int toContinue = 1;
-
-    if (_lexData->nbSymboles > _lexData->tailleTableSymboles)
-    {
-        _lexData->tailleTableSymboles += 4;
-        toContinue = realloc(_lexData->tableSymboles, _lexData->tailleTableSymboles);
-    }
-
-    if (toContinue)
+    if (!changeTableSymboleSize(_lexData))
     {
         _lexData->tableSymboles[_lexData->nbSymboles].type = JSON_REAL_NUMBER;
         _lexData->tableSymboles[_lexData->nbSymboles].val.reel = _val;
@@ -190,20 +218,12 @@ void addRealSymbolToLexData(TLex *_lexData, const float _val)
  */
 void addStringSymbolToLexData(TLex *_lexData, char *_val)
 {
-    int toContinue = 1;
-
-    if (_lexData->nbSymboles > _lexData->tailleTableSymboles)
-    {
-        _lexData->tailleTableSymboles += 4;
-        toContinue = realloc(_lexData->tableSymboles, _lexData->tailleTableSymboles);
-    }
-
-    if (toContinue)
+    if (!changeTableSymboleSize(_lexData))
     {
         _lexData->tableSymboles[_lexData->nbSymboles].type = JSON_STRING;
         _lexData->tableSymboles[_lexData->nbSymboles].val.chaine = _val;
         ++_lexData->nbSymboles;
-    }
+    } 
 }
 
 /**
@@ -219,12 +239,14 @@ int lex(TLex *_lexData)
     int state = 0;
     int ended = 0;
     int founded = 0;
-    regex_t preg;
 
-    while (!ended)
+    char *obj = NULL;
+    int objSize = 0;
+
+    while (ended == 0 && *_lexData->startPos != '\0')
     {
-        current = *_lexData->data;
-
+        current = *_lexData->startPos;
+        
         switch (state)
         {
         case 0:
@@ -244,252 +266,391 @@ int lex(TLex *_lexData)
 
             case '{':
                 state = 17;
-                ended = 1;
+                ended = JSON_LCB;
                 break;
 
             case '}':
                 state = 18;
-                ended = 1;
+                ended = JSON_RCB;
                 break;
 
             case '[':
                 state = 19;
-                ended = 1;
+                ended = JSON_LB;
                 break;
 
             case ']':
                 state = 20;
-                ended = 1;
+                ended = JSON_RB;
                 break;
 
             case ':':
                 state = 21;
-                ended = 1;
+                ended = JSON_COLON;
                 break;
 
             case ',':
                 state = 22;
-                ended = 1;
+                ended = JSON_COMMA;
                 break;
 
             case '"':
                 state = 23;
                 break;
 
+            case '-':
+                state = 27;
+                break;
+
+            case '0':
+                state = 28;
+                break;
+
             default:
-                if (current == '0')
-                    state = 27;
-                else if (current >= '1' && current <= '9')
+                if (current >= '1' && current <= '9')
                     state = 29;
-                else
-                    ended = JSON_LEX_ERROR;
-                break;
-
-                break;
-
-            case 1:
-                if (current == 'r')
-                    state = 2;
-                else
-                    ended = JSON_LEX_ERROR;
-                break;
-
-            case 2:
-                if (current == 'u')
-                    state = 3;
-                else
-                    ended = JSON_LEX_ERROR;
-                break;
-
-            case 3:
-                if (current == 'e')
-                    state = 4;
-                else
-                    ended = JSON_LEX_ERROR;
-                break;
-
-            case 4:
-                //On change d'état si on à trouvé un séparateur
-                if (isSep(current))
+                else if (isSep(current))
                 {
-                    state = 5;
-                    ended = 1;
-                }
-                else
-                    ended = JSON_LEX_ERROR;
-
-                break;
-
-            case 6:
-                if (current == 'a')
-                {
-                    state = 7;
-                }
-                else
-                {
-                    ended = JSON_LEX_ERROR;
-                }
-                break;
-
-            case 7:
-                if (current == 'l')
-                {
-                    state = 8;
-                }
-                else
-                {
-                    ended = JSON_LEX_ERROR;
-                }
-                break;
-
-            case 8:
-                if (current == 's')
-                {
-                    state = 9;
-                }
-                else
-                {
-                    ended = JSON_LEX_ERROR;
-                }
-                break;
-
-            case 9:
-                if (current == 'e')
-                {
-                    state = 10;
-                }
-                else
-                {
-                    ended = JSON_LEX_ERROR;
-                }
-                break;
-
-            case 10:
-
-                //On change d'état si on à trouvé un séparateur
-                if (isSep(current))
-                {
-                    state = 11;
-                    ended = 1;
+                    /*if(current == "\n"){
+                        ++_lexData->nbLignes;
+                    }*/
+                    state = 0;
                 }
                 else
                     ended = JSON_LEX_ERROR;
                 break;
-
-            case 12:
-                if (current == 'u')
-                {
-                    state = 13;
-                }
-                else
-                {
-                    ended = JSON_LEX_ERROR;
-                }
-                break;
-
-            case 13:
-                if (current == 'l')
-                {
-                    state = 14;
-                }
-                else
-                {
-                    ended = JSON_LEX_ERROR;
-                }
-                break;
-
-            case 14:
-                if (current == 'l')
-                {
-                    state = 15;
-                }
-                else
-                {
-                    ended = JSON_LEX_ERROR;
-                }
-                break;
-
-            case 15:
-                if (isSep(current))
-                {
-                    state = 16;
-                    ended = 1;
-                }
-                else
-                {
-                    ended = JSON_LEX_ERROR;
-                }
-                break;
-
-            case 23:
-                if (current == '"')
-                {
-                    state = 26;
-                    ended = 1;
-                }
-                else if (current == '\\')
-                {
-                    state = 25;
-                }
-                else
-                {
-                    state = 23;
-                }
-                break;
-
-            case 25:
-                state = 23;
-                break;
-
-            case 27 :
-                if(!regcomp(&preg, "[1-9]") && ){
-                    
-                }
-                break;
-
             }
 
-            switch (ended)
+            break;
+
+        case 1:
+            if (current == 'r')
+                state = 2;
+            else
+                ended = JSON_LEX_ERROR;
+            break;
+        case 2:
+            if (current == 'u')
+                state = 3;
+            else
+                ended = JSON_LEX_ERROR;
+            break;
+
+        case 3:
+            if (current == 'e')
+                state = 4;
+            else
+                ended = JSON_LEX_ERROR;
+            break;
+
+        case 4:
+            //On change d'état si on à trouvé un séparateur
+            if (isSep(current))
             {
-            case JSON_LEX_ERROR:
-                fprintf(stderr, "Erreur : caractere %c inconnu (etat %d)\n", current, state);
-                return JSON_LEX_ERROR;
-            case 2:
-                fprintf(stderr, "Erreur : etat %d inconnu\n", state);
-                return JSON_LEX_ERROR;
-            default:
-                return state;
+                state = 5;
+                ended = JSON_TRUE;
+            }
+            else
+                ended = JSON_LEX_ERROR;
+
+            break;
+
+        case 6:
+            if (current == 'a')
+            {
+                state = 7;
+            }
+            else
+            {
+                ended = JSON_LEX_ERROR;
+            }
+            break;
+
+        case 7:
+            if (current == 'l')
+            {
+                state = 8;
+            }
+            else
+            {
+                ended = JSON_LEX_ERROR;
+            }
+            break;
+
+        case 8:
+            if (current == 's')
+            {
+                state = 9;
+            }
+            else
+            {
+                ended = JSON_LEX_ERROR;
+            }
+            break;
+
+        case 9:
+            if (current == 'e')
+            {
+                state = 10;
+            }
+            else
+            {
+                ended = JSON_LEX_ERROR;
+            }
+            break;
+
+        case 10:
+
+            //On change d'état si on à trouvé un séparateur
+            if (isSep(current))
+            {
+                state = 11;
+                ended = JSON_FALSE;
+            }
+            else
+                ended = JSON_LEX_ERROR;
+            break;
+
+        case 12:
+            if (current == 'u')
+            {
+                state = 13;
+            }
+            else
+            {
+                ended = JSON_LEX_ERROR;
+            }
+            break;
+
+        case 13:
+            if (current == 'l')
+            {
+                state = 14;
+            }
+            else
+            {
+                ended = JSON_LEX_ERROR;
+            }
+            break;
+
+        case 14:
+            if (current == 'l')
+            {
+                state = 15;
+            }
+            else
+            {
+                ended = JSON_LEX_ERROR;
+            }
+            break;
+
+        case 15:
+            if (isSep(current))
+            {
+                state = 16;
+                ended = JSON_NULL;
+            }
+            else
+            {
+                ended = JSON_LEX_ERROR;
+            }
+            break;
+
+        case 23:
+            if (current == '"')
+            {
+                state = 26;
+                ended = JSON_STRING;
+            }
+            else if (current == '\\')
+            {
+                state = 25;
+            }
+            else
+            {
+                state = 23;
+            }
+            break;
+
+        case 25:
+            state = 23;
+            break;
+
+        case 27:
+            if (current == '0')
+                state = 27;
+            else if (current >= '1' && current <= '9')
+                state = 29;
+            else
+                ended = JSON_LEX_ERROR;
+            break;
+
+        case 28:
+            if (current == '.')
+            {
+                state = 30;
+            }
+            else if (isSep(current))
+            {
+                state = 31;
+                ended = JSON_INT_NUMBER;
+            }
+            else
+            {
+                ended = JSON_LEX_ERROR;
+            }
+            break;
+
+        case 29:
+            if (current >= '0' && current <= '9')
+                state = 29;
+            else if (current == '.')
+            {
+                state = 30;
+            }
+            else if (isSep(current))
+            {
+                state = 31;
+                ended = JSON_INT_NUMBER;
+            }
+            else if (toupper(current) == 'E')
+            {
+                state = 32;
+            }
+            else
+            {
+                ended = JSON_LEX_ERROR;
+            }
+            break;
+
+        case 30:
+            if (current >= '0' && current <= '9')
+            {
+                state = 33;
+            }
+            else
+            {
+                ended = JSON_LEX_ERROR;
+            }
+            break;
+
+        case 31:
+            if (current >= '0' && current <= '9')
+            {
+                state = 33;
+            }
+            else
+            {
+                ended = JSON_LEX_ERROR;
+            }
+            break;
+
+        case 32:
+            if (current == '+' || current == '-' || (current >= '0' && current <= '9'))
+            {
+                state = 35;
+            }
+            else
+            {
+                ended = JSON_LEX_ERROR;
             }
 
-            return ended;
+            break;
+
+        case 33:
+            if (current >= '0' && current <= '9')
+            {
+                state = 33;
+            }
+            else if (toupper(current) == 'E')
+            {
+                state = 32;
+            }
+            else if (isSep(current))
+            {
+                state = 34;
+                ended = JSON_REAL_NUMBER;
+            }
+            else
+            {
+                ended = JSON_LEX_ERROR;
+            }
+            break;
+
+        case 35:
+            if (current >= '0' && current <= '9')
+            {
+                state = 35;
+            }
+            else if (isSep(current))
+            {
+                state = 36;
+                ended = JSON_REAL_NUMBER;
+            }
+            else
+            {
+                ended = JSON_LEX_ERROR;
+            }
+
+            break;
         }
+
+        obj = realloc(obj, sizeof(char) * (objSize + 1));
+        obj[objSize] = current;
+        ++objSize;
+
+        ++_lexData->startPos;
     }
+
+    char *tmp;
+    obj = realloc(obj, sizeof(char) * (objSize + 1));
+    obj[objSize] = '\0';
+
+    switch (ended)
+    {
+    case JSON_STRING:
+        tmp = strdup(obj);
+        addStringSymbolToLexData(_lexData, tmp);
+        break;
+
+    case JSON_INT_NUMBER:
+        addIntSymbolToLexData(_lexData, atoi(obj));
+        break;
+
+    case JSON_REAL_NUMBER:
+        addRealSymbolToLexData(_lexData, atof(obj));
+        break;
+    }
+
+    free(obj);
+
+    return ended;
 }
 
-    /**
+/**
  * \fn int main()
  * \brief fonction principale
  */
-    int main()
+int main()
+{
+    char *test;
+    int i;
+    TLex *lex_data;
+
+    test = strdup("{\"obj1\": [ {\"obj2\": 12, \"obj3\":\"text1 \\\"and\\\" text2\"},\n{\"obj4\":314.32} ], \"obj5\": true }");
+
+    printf("%s", test);
+    printf("\n");
+
+    lex_data = initLexData(test);
+    i = lex(lex_data);
+    while (i != JSON_LEX_ERROR && *lex_data->startPos != '\0')
     {
-        char *test;
-        int i;
-        TLex *lex_data;
-
-        test = strdup("{\"obj1\": [ {\"obj2\": 12, \"obj3\":\"text1 \\\"and\\\" text2\"},\n{\"obj4\":314.32} ], \"obj5\": true }");
-
-        printf("%s", test);
-        printf("\n");
-
-        lex_data = initLexData(test);
+        printf("lex()=%d\n", i);
         i = lex(lex_data);
-        while (i != JSON_LEX_ERROR)
-        {
-            printf("lex()=%d\n", i);
-            i = lex(lex_data);
-        }
-        printLexData(lex_data);
-        deleteLexData(&lex_data);
-        free(test);
-        return 0;
     }
+    printLexData(lex_data);
+    deleteLexData(&lex_data);
+
+    return 0;
+}
