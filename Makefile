@@ -23,7 +23,7 @@ clean:
 	rm $(OBJ) $(APPNAME)
 
 valgrind: $(APPNAME)
-	valgrind --leak-check=full ./$(APPNAME)
+	@ valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes ./$(APPNAME)
 
 
 .PHONY: doc

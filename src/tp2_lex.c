@@ -223,7 +223,7 @@ void addStringSymbolToLexData(TLex *_lexData, char *_val)
         _lexData->tableSymboles[_lexData->nbSymboles].type = JSON_STRING;
         _lexData->tableSymboles[_lexData->nbSymboles].val.chaine = _val;
         ++_lexData->nbSymboles;
-    } 
+    }
 }
 
 /**
@@ -246,7 +246,7 @@ int lex(TLex *_lexData)
     while (ended == 0 && *_lexData->startPos != '\0')
     {
         current = *_lexData->startPos;
-        
+
         switch (state)
         {
         case 0:
@@ -603,7 +603,8 @@ int lex(TLex *_lexData)
     }
 
     char *tmp;
-    obj = realloc(obj, sizeof(char) * (objSize + 1));
+    ++objSize;
+    obj = realloc(obj, sizeof(char) * (objSize));
     obj[objSize] = '\0';
 
     switch (ended)

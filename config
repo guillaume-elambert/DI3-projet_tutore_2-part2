@@ -3,7 +3,7 @@ CC = gcc
 FLAGS = -std=c11 -Wall
 
 # Makefile
-APPNAME = tp2_ex2-3
+APPNAME = tp2_lex
 EXT     = .c
 SRCDIR  = src
 OBJDIR  = obj
@@ -12,7 +12,7 @@ INCDIR  = include
 SRC = $(wildcard $(SRCDIR)/*$(EXT))
 OBJ = $(SRC:$(SRCDIR)/%$(EXT)=$(OBJDIR)/%.o)
 
-RUN_CMD = ./$(APPNAME) "{\"obj1\": [ {\"obj2\": 12, \"obj3\":\"text1 \\\"and\\\" text2\"}, \n{\"obj4\":314.32} ], \"obj5\": true }"
+RUN_CMD = ./$(APPNAME) # "{\"obj1\": [ {\"obj2\": 12, \"obj3\":\"text1 \\\"and\\\" text2\"}, \n{\"obj4\":314.32} ], \"obj5\": true }"
 
 
 
